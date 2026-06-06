@@ -4,6 +4,7 @@ import struct
 VERSION = 1
 
 HEADER_FORMAT = "!BBBBQI"
+# Calculate header size in bytes
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
 def build_message(m_type, payload=""):
@@ -19,8 +20,10 @@ def build_message(m_type, payload=""):
         len(payload_bytes)
     )
 
+    # Return complete message
     return header + payload_bytes
 
+# Parse a received protocol message
 def parse_message(data):
     version, msg_type, flags, reserved, m_id, length = struct.unpack(
         HEADER_FORMAT,

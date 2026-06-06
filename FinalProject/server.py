@@ -1,74 +1,117 @@
-import socket
+import argparse
+import asyncio
+
 from ConnectionState import ConnectionState
 from protocol import parse_message, build_message
 from MessageType import MessageType
-import argparse
 
+from aioquic.asyncio import serve
+from aioquic.asyncio.protocol import QuicConnectionProtocol
+from aioquic.quic.configuration import QuicConfiguration
+from aioquic.quic.events import StreamDataReceived
+
+# Default configuration
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 54400
 
-parser = argparse.ArgumentParser(description="QuicChat Server")
-parser.add_argument("--host", default=DEFAULT_HOST, help="Input host/IP address to bind server to")
-parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Input port number to bind server to")
-args = parser.parse_args()
+# authentication token 
+TOKEN = "test-token"
 
-HOST = args.host
-PORT = args.port
+# authentication failure test token 
+#TOKEN = "wrong-token"
 
-state = ConnectionState.INIT
+#QuicChat Server
+class QuicChatServer(QuicConnectionProtocol):
 
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.bind((HOST, PORT))
-server_socket.listen(1)
+    # INIT state
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.state = ConnectionState.INIT
 
-print(f"Server listening on {HOST}:{PORT}")
+    #Process data and apply DFA state transitions
+    def quic_event_received(self, event):
+        if isinstance(event, StreamDataReceived):
+            msg_type, payload = parse_message(event.data)
 
-conn, addr = server_socket.accept()
-print(f"Connected by {addr}")
+            print(f"\nType: {msg_type.name}")
+            print(f"Payload: {payload}")
 
-VALID_TOKEN = "test-token"
+            # INIT -> AUTHENTICATING transition
+            if self.state == ConnectionState.INIT:
+                if msg_type == MessageType.AUTH:
+                    self.state = ConnectionState.AUTHENTICATING
+                    print("State changed to AUTHENTICATING")
 
-while state != ConnectionState.CLOSED:
-    data = conn.recv(1024)
+                    # Validate authentication token
+                    if payload == TOKEN:
+                        response = build_message( MessageType.AUTH_OK, "Authentication successful" )
+                        self._quic.send_stream_data(event.stream_id, response)
+                        self.transmit()
 
-    if not data:
-        state = ConnectionState.CLOSED
-        break
+                        self.state = ConnectionState.ACTIVE
+                        print("State changed to ACTIVE")
+                    else:
+                        # Send AUTH_FAIL and close connection
+                        response = build_message( MessageType.AUTH_FAIL, "Authentication failed" )
+                        self._quic.send_stream_data(event.stream_id, response, end_stream=True)
+                        self.transmit()
 
-    msg_type, payload = parse_message(data)
+                        self.state = ConnectionState.CLOSED
+                        print("State changed to CLOSED")
+                else:
+                    # Error handling: Message received before authentication
+                    response = build_message( MessageType.ERROR, "You neeed to authenticate first" )
+                    self._quic.send_stream_data(event.stream_id, response, end_stream=True)
+                    self.transmit()
+                    self.state = ConnectionState.CLOSED
 
-    print(f"Type: {msg_type}")
-    print(f"Payload: {payload}")
+            elif self.state == ConnectionState.ACTIVE:
+                # Process chat messages
+                if msg_type == MessageType.SEND_MESSAGE:
+                    print(f"Chat message: {payload}")
+                    response = build_message( MessageType.DELIVERED_ACK, "Message received" )
+                    self._quic.send_stream_data(event.stream_id, response)
+                    self.transmit()
 
-    if state == ConnectionState.INIT:
-        if msg_type == MessageType.AUTH:
-            state = ConnectionState.AUTHENTICATING
-            print("State changed to AUTHENTICATING")
+                # Close the connection
+                elif msg_type == MessageType.CLOSE:
+                    response = build_message(MessageType.CLOSE, "Closing")
+                    self._quic.send_stream_data(event.stream_id, response, end_stream=True)
+                    self.transmit()
+                    self.state = ConnectionState.CLOSED
 
-            if payload == VALID_TOKEN:
-                conn.sendall(build_message(MessageType.AUTH_OK, "Authentication successful"))
-                state = ConnectionState.ACTIVE
-                print("State changed to ACTIVE")
-            else:
-                conn.sendall(build_message(MessageType.AUTH_FAIL, "Authentication failed"))
-                state = ConnectionState.CLOSED
-                print("State changed to CLOSED")
-        else:
-            conn.sendall(build_message(MessageType.ERROR, "You must authenticate first"))
-            state = ConnectionState.CLOSED
+                # Invalid message so close the connection
+                else:
+                    response = build_message(MessageType.ERROR, "Invalid message")
+                    self._quic.send_stream_data(event.stream_id, response, end_stream=True)
+                    self.transmit()
+                    self.state = ConnectionState.CLOSED
 
-    elif state == ConnectionState.ACTIVE:
-        if msg_type == MessageType.SEND_MESSAGE:
-            user_message = payload
-            print(f"Chat message: {user_message}")
-            conn.sendall(build_message(MessageType.SEND_MESSAGE, "Message received"))
-        elif msg_type == MessageType.CLOSE:
-            conn.sendall(build_message(MessageType.CLOSE, "Closing"))
-            state = ConnectionState.CLOSED
-        else:
-            conn.sendall(build_message(MessageType.ERROR, "Invalid message"))
-            state = ConnectionState.CLOSED
 
-conn.close()
-server_socket.close()
-print("Server closed")
+# start the QUIC server
+async def main():
+    parser = argparse.ArgumentParser(description="QuicChat Server")
+    parser.add_argument("--host", default=DEFAULT_HOST, help="Input host/IP address to bind server to")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Input port number to bind server to")
+    args = parser.parse_args()
+
+    configuration = QuicConfiguration(
+        is_client=False,
+        alpn_protocols=["quicchat"]
+    )
+    configuration.load_cert_chain("ssl_cert.pem", "ssl_key.pem")
+
+    print(f"QUIC server listening on {args.host}:{args.port}")
+
+    await serve(
+        args.host,
+        args.port,
+        configuration=configuration,
+        create_protocol=QuicChatServer
+    )
+
+    await asyncio.Future()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

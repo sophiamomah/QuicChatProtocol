@@ -5,5 +5,6 @@ class MessageType(IntEnum):
     AUTH_OK = 2
     AUTH_FAIL = 3
     SEND_MESSAGE = 6
+    DELIVERED_ACK = 7
     ERROR = 12
     CLOSE = 99
