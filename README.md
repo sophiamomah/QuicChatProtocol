@@ -69,3 +69,7 @@ Generate a self-signed certificate for local testing:
 ## Notes
 - The client exits when the user types quit. The server remains running to accept future QUIC client connections and can be stopped manually with Ctrl+C.
 - IDLE state was listed as a possible stretch goal but was not implemented in the final prototype due to time constraints.
+
+## Demo
+
+https://drexel.zoom.us/clips/share/uq2CtGFHRTu7PCitlbsb-w
