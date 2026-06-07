@@ -4,7 +4,7 @@ QuicChat is a stateful messaging service built on top of QUIC. The service allow
 
 This project uses aioquic only to provide QUIC transport support. The QuicChat protocol logic, including message framing, serialization/parsing, PDU processing, message types, authentication handling, and DFA state validation, is implemented manually in the project source code.
 
-##Features Implemented
+## Features Implemented
 
 - QUIC client and server written in Python
 - Stateful protocol implementation using a DFA
@@ -18,13 +18,13 @@ This project uses aioquic only to provide QUIC transport support. The QuicChat p
 - Command-line configuration for host and port
 - Command-line client interface
 
-##Connection States
+## Connection States
 - INIT
 - AUTHENTICATING
 - ACTIVE
 - CLOSED
 
-##Message Types
+## Message Types
 - AUTH
 - AUTH_OK
 - AUTH_FAIL
@@ -33,14 +33,14 @@ This project uses aioquic only to provide QUIC transport support. The QuicChat p
 - ERROR
 - CLOSE
 
-##Files
+## Files
 - server.py – QUIC server 
 - client.py – QUIC client 
 - protocol.py – message serialization and parsing functions
 - MessageType.py – message types
 - ConnectionState.py – DFA state definitions
 
-##Requirements
+## Requirements
 
 Create and activate a virtual environment:
     python3 -m venv venv
@@ -51,19 +51,19 @@ pip install aioquic
 Generate a self-signed certificate for local testing:
     openssl req -x509 -newkey rsa:2048 -keyout ssl_key.pem -o
 
-##Run the server
+## Run the server
 
     python3 server.py
     or
     python3 server.py --host 127.0.0.1 --port 54400
 
-##Run the client
+## Run the client
 
     python3 client.py
     or
     python3 client.py --host 127.0.0.1 --port 54400
 
-    ###To test authentication failure:
+    ### To test authentication failure:
         python3 client.py --token wrong-token
 
 ## Notes
