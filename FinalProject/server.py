@@ -2,7 +2,7 @@ import argparse
 import asyncio
 
 from ConnectionState import ConnectionState
-from protocol import parse_message, build_message
+from protocol import parse, build
 from MessageType import MessageType
 
 from aioquic.asyncio import serve
@@ -31,7 +31,7 @@ class QuicChatServer(QuicConnectionProtocol):
     #Process data and apply DFA state transitions
     def quic_event_received(self, event):
         if isinstance(event, StreamDataReceived):
-            msg_type, payload = parse_message(event.data)
+            msg_type, payload = parse(event.data)
 
             print(f"\nType: {msg_type.name}")
             print(f"Payload: {payload}")
@@ -44,7 +44,7 @@ class QuicChatServer(QuicConnectionProtocol):
 
                     # Validate authentication token
                     if payload == TOKEN:
-                        response = build_message( MessageType.AUTH_OK, "Authentication successful" )
+                        response = build( MessageType.AUTH_OK, "Authentication successful" )
                         self._quic.send_stream_data(event.stream_id, response)
                         self.transmit()
 
@@ -52,7 +52,7 @@ class QuicChatServer(QuicConnectionProtocol):
                         print("State changed to ACTIVE")
                     else:
                         # Send AUTH_FAIL and close connection
-                        response = build_message( MessageType.AUTH_FAIL, "Authentication failed" )
+                        response = build( MessageType.AUTH_FAIL, "Authentication failed" )
                         self._quic.send_stream_data(event.stream_id, response, end_stream=True)
                         self.transmit()
 
@@ -60,7 +60,7 @@ class QuicChatServer(QuicConnectionProtocol):
                         print("State changed to CLOSED")
                 else:
                     # Error handling: Message received before authentication
-                    response = build_message( MessageType.ERROR, "You neeed to authenticate first" )
+                    response = build( MessageType.ERROR, "You neeed to authenticate first" )
                     self._quic.send_stream_data(event.stream_id, response, end_stream=True)
                     self.transmit()
                     self.state = ConnectionState.CLOSED
@@ -69,20 +69,20 @@ class QuicChatServer(QuicConnectionProtocol):
                 # Process chat messages
                 if msg_type == MessageType.SEND_MESSAGE:
                     print(f"Chat message: {payload}")
-                    response = build_message( MessageType.DELIVERED_ACK, "Message received" )
+                    response = build( MessageType.DELIVERED_ACK, "Message received" )
                     self._quic.send_stream_data(event.stream_id, response)
                     self.transmit()
 
                 # Close the connection
                 elif msg_type == MessageType.CLOSE:
-                    response = build_message(MessageType.CLOSE, "Closing")
+                    response = build(MessageType.CLOSE, "Closing")
                     self._quic.send_stream_data(event.stream_id, response, end_stream=True)
                     self.transmit()
                     self.state = ConnectionState.CLOSED
 
                 # Invalid message so close the connection
                 else:
-                    response = build_message(MessageType.ERROR, "Invalid message")
+                    response = build(MessageType.ERROR, "Invalid message")
                     self._quic.send_stream_data(event.stream_id, response, end_stream=True)
                     self.transmit()
                     self.state = ConnectionState.CLOSED
