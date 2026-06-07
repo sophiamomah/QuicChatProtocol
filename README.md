@@ -63,7 +63,7 @@ Generate a self-signed certificate for local testing:
     or
     python3 client.py --host 127.0.0.1 --port 54400
 
-    ### To test authentication failure:
+    To test authentication failure:
         python3 client.py --token wrong-token
 
 ## Notes
